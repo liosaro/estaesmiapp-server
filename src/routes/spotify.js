@@ -1,4 +1,5 @@
 const express = require('express');
+const fetch = require('node-fetch');
 const { spotifyFetch } = require('../services/spotifyAuth');
 
 const router = express.Router();
@@ -33,6 +34,60 @@ function mapTrack(item) {
     externalUrl: track.external_urls?.spotify ?? null,
   };
 }
+
+// --- Login unico para obtener un refresh_token (igual que en la web) ---
+// Visita /api/podcasts/auth/login una sola vez, logueado con tu cuenta de
+// Spotify, copia el refresh_token que te muestre /auth/callback a Render
+// como SPOTIFY_REFRESH_TOKEN, y listo: no se vuelve a necesitar.
+
+router.get('/auth/login', (req, res) => {
+  const clientId = process.env.SPOTIFY_CLIENT_ID;
+  const redirectUri = `${req.protocol}://${req.get('host')}/api/podcasts/auth/callback`;
+  const params = new URLSearchParams({
+    response_type: 'code',
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    scope: '',
+  });
+  res.redirect(`https://accounts.spotify.com/authorize?${params.toString()}`);
+});
+
+router.get('/auth/callback', async (req, res) => {
+  const { code, error } = req.query;
+  if (error) return res.status(400).send(`Error de Spotify: ${error}`);
+
+  const clientId = process.env.SPOTIFY_CLIENT_ID;
+  const clientSecret = process.env.SPOTIFY_CLIENT_SECRET;
+  const redirectUri = `${req.protocol}://${req.get('host')}/api/podcasts/auth/callback`;
+  const basic = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+
+  try {
+    const response = await fetch('https://accounts.spotify.com/api/token', {
+      method: 'POST',
+      headers: {
+        Authorization: `Basic ${basic}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        grant_type: 'authorization_code',
+        code,
+        redirect_uri: redirectUri,
+      }).toString(),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      return res.status(500).send(`<pre>Error al canjear el codigo: ${JSON.stringify(data, null, 2)}</pre>`);
+    }
+    res.send(`
+      <h2>Listo</h2>
+      <p>Copia este valor completo y pegalo en Render como <b>SPOTIFY_REFRESH_TOKEN</b>:</p>
+      <textarea style="width:100%;height:100px">${data.refresh_token}</textarea>
+      <p>Despues de guardarlo en Render, ya puedes cerrar esta pagina.</p>
+    `);
+  } catch (err) {
+    res.status(500).send(`Error: ${err.message}`);
+  }
+});
 
 // Episodios del podcast legal/emprendimiento (ej. con la abogada Astrid Cordoba)
 router.get('/episodes', async (req, res, next) => {
