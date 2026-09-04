@@ -47,7 +47,7 @@ router.get('/auth/login', (req, res) => {
     response_type: 'code',
     client_id: clientId,
     redirect_uri: redirectUri,
-    scope: '',
+    scope: 'playlist-read-private playlist-read-collaborative',
   });
   res.redirect(`https://accounts.spotify.com/authorize?${params.toString()}`);
 });
