@@ -1,12 +1,12 @@
 const fetch = require('node-fetch');
 
-// Reemplaza a spotify_proxy.php / spotify_refresh_token.json del sitio actual.
-// Usa el flujo "Client Credentials" de Spotify: no requiere login de usuario,
-// solo sirve para LEER contenido publico (episodios, playlists), que es todo
-// lo que la app necesita mostrar.
-//
-// El client_id/client_secret NUNCA se compilan dentro de la app movil: solo
-// existen como variables de entorno en Render.
+// Client Credentials ya no alcanza para leer playlists/episodios: Spotify
+// exige un token autenticado por una persona real, aunque el contenido
+// sea publico (lo mismo que ya resolvimos en el sitio web). Por eso, si
+// existe SPOTIFY_REFRESH_TOKEN en el entorno, lo usamos para renovar el
+// access_token en vez de client_credentials. Ver rutas /auth/login y
+// /auth/callback en routes/spotify.js para obtener ese refresh_token
+// una sola vez.
 
 let cachedToken = null; // { access_token, expires_at }
 
@@ -17,6 +17,7 @@ async function getAccessToken() {
 
   const clientId = process.env.SPOTIFY_CLIENT_ID;
   const clientSecret = process.env.SPOTIFY_CLIENT_SECRET;
+  const refreshToken = process.env.SPOTIFY_REFRESH_TOKEN;
 
   if (!clientId || !clientSecret) {
     throw new Error(
@@ -26,13 +27,17 @@ async function getAccessToken() {
 
   const basic = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
 
+  const body = refreshToken
+    ? `grant_type=refresh_token&refresh_token=${encodeURIComponent(refreshToken)}`
+    : 'grant_type=client_credentials';
+
   const response = await fetch('https://accounts.spotify.com/api/token', {
     method: 'POST',
     headers: {
       Authorization: `Basic ${basic}`,
       'Content-Type': 'application/x-www-form-urlencoded',
     },
-    body: 'grant_type=client_credentials',
+    body,
   });
 
   if (!response.ok) {
@@ -41,6 +46,9 @@ async function getAccessToken() {
   }
 
   const data = await response.json();
+  if (data.refresh_token && data.refresh_token !== refreshToken) {
+    console.log('[spotifyAuth] Spotify roto el refresh_token. Actualiza SPOTIFY_REFRESH_TOKEN en Render con:', data.refresh_token);
+  }
   cachedToken = {
     access_token: data.access_token,
     expires_at: Date.now() + data.expires_in * 1000,
