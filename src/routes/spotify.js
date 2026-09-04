@@ -42,7 +42,7 @@ function mapTrack(item) {
 
 router.get('/auth/login', (req, res) => {
   const clientId = process.env.SPOTIFY_CLIENT_ID;
-  const redirectUri = `${req.protocol}://${req.get('host')}/api/podcasts/auth/callback`;
+  const redirectUri = 'https://estaesmiapp-server.onrender.com/api/podcasts/auth/callback';
   const params = new URLSearchParams({
     response_type: 'code',
     client_id: clientId,
@@ -58,7 +58,7 @@ router.get('/auth/callback', async (req, res) => {
 
   const clientId = process.env.SPOTIFY_CLIENT_ID;
   const clientSecret = process.env.SPOTIFY_CLIENT_SECRET;
-  const redirectUri = `${req.protocol}://${req.get('host')}/api/podcasts/auth/callback`;
+  const redirectUri = 'https://estaesmiapp-server.onrender.com/api/podcasts/auth/callback';
   const basic = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
 
   try {
