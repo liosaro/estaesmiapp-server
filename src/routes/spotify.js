@@ -22,24 +22,8 @@ function mapEpisode(item) {
   };
 }
 
-function mapTrack(item) {
-  const track = item.track ?? item;
-  if (!track) return null;
-  return {
-    id: track.id,
-    name: track.name,
-    artists: (track.artists || []).map((a) => a.name).join(', '),
-    imageUrl: track.album?.images?.[0]?.url ?? null,
-    previewUrl: track.preview_url ?? null,
-    externalUrl: track.external_urls?.spotify ?? null,
-  };
-}
-
-// --- Login unico para obtener un refresh_token (igual que en la web) ---
-// Visita /api/podcasts/auth/login una sola vez, logueado con tu cuenta de
-// Spotify, copia el refresh_token que te muestre /auth/callback a Render
-// como SPOTIFY_REFRESH_TOKEN, y listo: no se vuelve a necesitar.
-
+// --- Login unico para obtener un refresh_token (necesario para episodios;
+// las playlists ya no lo requieren, ver mas abajo) ---
 router.get('/auth/login', (req, res) => {
   const clientId = process.env.SPOTIFY_CLIENT_ID;
   const redirectUri = 'https://estaesmiapp-server.onrender.com/api/podcasts/auth/callback';
@@ -108,23 +92,26 @@ router.get('/episodes', async (req, res, next) => {
   }
 });
 
-// Playlist principal del canal o playlist patrocinada, segun :key
-router.get('/playlist/:key', async (req, res, next) => {
-  try {
-    const { key } = req.params;
-    const getId = PLAYLIST_KEYS[key];
-    if (!getId) {
-      return res.status(400).json({ ok: false, error: 'key debe ser "principal" o "sponsor"' });
-    }
-    const playlistId = getId();
-    if (!playlistId) {
-      return res.status(501).json({ ok: false, error: `Falta el ID de la playlist "${key}" en el servidor.` });
-    }
-    const data = await spotifyFetch(`/playlists/${playlistId}/tracks?market=US&limit=50`);
-    res.json({ ok: true, tracks: (data.items || []).map(mapTrack).filter(Boolean) });
-  } catch (err) {
-    next(err);
+// Playlist principal del canal o playlist patrocinada, segun :key.
+// Nota: Spotify bloquea con 403 la lectura de tracks via API (incluso de
+// playlists propias) para apps sin "Extended Quota Mode" aprobado por
+// Spotify. En vez de pelear con eso, devolvemos la URL del reproductor
+// embebido oficial (el mismo truco que ya usa la web para los episodios),
+// que no tiene esa restriccion.
+router.get('/playlist/:key', (req, res) => {
+  const { key } = req.params;
+  const getId = PLAYLIST_KEYS[key];
+  if (!getId) {
+    return res.status(400).json({ ok: false, error: 'key debe ser "principal" o "sponsor"' });
   }
+  const playlistId = getId();
+  if (!playlistId) {
+    return res.status(501).json({ ok: false, error: `Falta el ID de la playlist "${key}" en el servidor.` });
+  }
+  res.json({
+    ok: true,
+    embedUrl: `https://open.spotify.com/embed/playlist/${playlistId}?utm_source=generator&theme=0`,
+  });
 });
 
 module.exports = router;
