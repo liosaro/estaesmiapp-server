@@ -48,6 +48,7 @@ router.get('/auth/login', (req, res) => {
     client_id: clientId,
     redirect_uri: redirectUri,
     scope: 'playlist-read-private playlist-read-collaborative',
+    show_dialog: 'true',
   });
   res.redirect(`https://accounts.spotify.com/authorize?${params.toString()}`);
 });
